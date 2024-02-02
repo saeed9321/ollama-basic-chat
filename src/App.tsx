@@ -1,31 +1,82 @@
 import { useState } from 'react'
 import './App.css'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/ui/card'
+import { Card } from './components/ui/card'
 import { Button } from './components/ui/button'
-import { Badge } from './components/ui/badge'
+import { Loader, Send } from 'lucide-react'
+import { Input } from './components/ui/input'
+import { answer } from "./OllamaChat";
 
 function App() {
+  const [chatHistory, setChatHistory] = useState<Record<string, string>[]>([]);
+  const [message, setMessage] = useState<string | undefined>("");
+  const [loading, setLoading] = useState<boolean>(false);
+
+
+  async function addMessage(message: string | undefined) {
+    if (!message) return;
+
+    setLoading(true);
+
+    setChatHistory(prev => [...prev, { 'user': message }]);
+    setMessage("");
+
+
+    await answer(message).then(async result => {
+      // add ai message filed
+      setChatHistory(prev => [...prev, { 'ai': "" }])
+
+      for await (const token of result) {
+
+        setChatHistory(prevChatHistory => {
+          const lastMessageIndex = prevChatHistory.length - 1;
+          const lastMessage = prevChatHistory[lastMessageIndex];
+          const updatedMessage = { ai: (lastMessage.ai || "") + token?.content };
+
+          return [
+            ...prevChatHistory.slice(0, lastMessageIndex),
+            updatedMessage,
+          ];
+        });
+      }
+
+    }).catch(err => {
+      alert(err?.message)
+    }).finally(() => {
+
+      setLoading(false);
+    })
+
+
+
+  }
+
+  function handleHitEnter(event: { key: string }) {
+    if (event.key === 'Enter' && !loading) addMessage(message)
+  }
+
+  const MessageBox = (message: Record<string, string>, index: number) => {
+    if (message['user']) {
+      return (
+        <Card key={index} className='p-2 mx-4 my-2 w-fit bg-slate-300'>{message['user']}</Card>
+      )
+    } else {
+      return (
+        <Card key={index} className='p-2 mx-4 my-2 w-fit bg-slate-400'>{message['ai']}</Card>
+      )
+    }
+  }
 
   return (
-    <div className='h-screen bg-gray-400 flex items-center justify-center'
-    >
-      <Card className='p-4 min-w-[400px]'>
-        <CardHeader>
-          <CardTitle>Hello Hackers</CardTitle>
-          <CardDescription>This is ReactJS biolerplate</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ol className='flex flex-wrap gap-10'>
-            <li><Badge>React</Badge></li>
-            <li><Badge>Typescript</Badge></li>
-            <li><Badge>Vite</Badge></li>
-            <li><Badge>Tailwind</Badge></li>
-            <li><Badge>Shadcn UI</Badge></li>
-          </ol>
-        </CardContent>
-        <CardFooter>
-          <Button variant={'outline'}>Get Started</Button>
-        </CardFooter>
+    <div className='flex items-center justify-center h-screen'>
+      <Card className='flex flex-col w-5/6 bg-gray-400 h-5/6'>
+        <div className='overflow-y-auto'>
+          {chatHistory.map((i, index) => MessageBox(i, index))}
+        </div>
+        <div className='flex m-4 mt-auto border rounded-lg shadow-md'>
+          <Input onKeyDown={handleHitEnter} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type a message..." />
+          <Button onClick={() => addMessage(message)}>{loading ? <Loader className='animate-spin' /> : <Send />}</Button>
+
+        </div>
       </Card>
     </div>
   )
